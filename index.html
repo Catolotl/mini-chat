@@ -504,43 +504,48 @@ if (!checkSavedLogin()) {
   });
 }
 
-// Auto-load messages from URL
+// Auto-load messages from persistent storage
 function startAutoLoad() {
   checkForMessages();
-  autoLoadInterval = setInterval(checkForMessages, 1000); // Check every second
+  autoLoadInterval = setInterval(checkForMessages, 2000); // Check every 2 seconds
 }
 
-function checkForMessages() {
+async function checkForMessages() {
   // Check all contacts for potential messages
-  Object.keys(contacts).forEach(contactId => {
-    // Simulate checking for new messages from this contact
-    // In a real system, this would check a server or shared storage
-    const pendingKey = `blade_pending_${currentUser}_from_${contactId}`;
-    const pendingMessages = localStorage.getItem(pendingKey);
-    
-    if (pendingMessages) {
-      const msgList = JSON.parse(pendingMessages);
-      msgList.forEach(msg => {
-        if (!messages[contactId]) {
-          messages[contactId] = [];
+  for (const contactId of Object.keys(contacts)) {
+    try {
+      // Check for messages in shared storage
+      const inboxKey = `inbox_${currentUser}_from_${contactId}`;
+      const result = await window.storage.get(inboxKey, true);
+      
+      if (result && result.value) {
+        const msgList = JSON.parse(result.value);
+        
+        msgList.forEach(msg => {
+          if (!messages[contactId]) {
+            messages[contactId] = [];
+          }
+          
+          // Only add if we don't already have this message
+          if (!messages[contactId].find(m => m.id === msg.id)) {
+            messages[contactId].push(msg);
+            showToast(`New message from ${contacts[contactId].name}!`);
+          }
+        });
+        
+        saveUserData();
+        renderContacts();
+        if (currentChatContact === contactId) {
+          renderMessages();
         }
         
-        if (!messages[contactId].find(m => m.id === msg.id)) {
-          messages[contactId].push(msg);
-          showToast(`New message from ${contacts[contactId].name}!`);
-        }
-      });
-      
-      saveUserData();
-      renderContacts();
-      if (currentChatContact === contactId) {
-        renderMessages();
+        // Clear the inbox after reading
+        await window.storage.delete(inboxKey, true);
       }
-      
-      // Clear pending messages after loading
-      localStorage.removeItem(pendingKey);
+    } catch (e) {
+      // Key doesn't exist or error - that's fine
     }
-  });
+  }
 }
 
 // Data Management
@@ -554,31 +559,6 @@ function loadUserData() {
 function saveUserData() {
   localStorage.setItem(`blade_contacts_${currentUser}`, JSON.stringify(contacts));
   localStorage.setItem(`blade_messages_${currentUser}`, JSON.stringify(messages));
-}
-
-// Encoding/Decoding (kept for compatibility but not used for sending)
-function encodeMessage(to, from, message, replyToId = null) {
-  const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  const data = {
-    to: to,
-    from: from,
-    msg: message,
-    id: msgId,
-    reply: replyToId,
-    time: new Date().toISOString()
-  };
-  const encoded = btoa(JSON.stringify(data));
-  return `${window.location.origin}${window.location.pathname}?msg=${encoded}`;
-}
-
-function decodeMessage(url) {
-  try {
-    const encoded = url.includes('?msg=') ? url.split('?msg=')[1] : url.replace('bladem://msg/', '');
-    const decoded = JSON.parse(atob(encoded));
-    return decoded;
-  } catch (e) {
-    return null;
-  }
 }
 
 // Contacts Management
@@ -849,30 +829,52 @@ function sendMessage() {
   const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   const messageData = {
     id: msgId,
-    from: currentUser,        // This is YOU
+    from: currentUser,
     msg: text,
     time: new Date().toISOString(),
-    read: true                // You’ve already "read" your own message
+    read: true
   };
 
   // Add to YOUR chat history instantly
   if (!messages[currentChatContact]) messages[currentChatContact] = [];
   messages[currentChatContact].push(messageData);
-
-  // Also send to their pending inbox
-  const pendingKey = `blade_pending_${currentChatContact}_from_${currentUser}`;
-  const existing = localStorage.getItem(pendingKey) || '[]';
-  const list = JSON.parse(existing);
-  list.push(messageData);
-  localStorage.setItem(pendingKey, JSON.stringify(list));
-
   saveUserData();
-  renderMessages();           // Show it immediately on the right
-  renderContacts();
 
+  // Send to THEIR inbox using shared storage
+  sendToRecipient(currentChatContact, messageData);
+
+  renderMessages();
+  renderContacts();
   composeInput.value = '';
   showToast('Message sent!');
 }
+
+async function sendToRecipient(recipientId, messageData) {
+  try {
+    const inboxKey = `inbox_${recipientId}_from_${currentUser}`;
+    
+    // Try to get existing inbox
+    let existingMessages = [];
+    try {
+      const result = await window.storage.get(inboxKey, true);
+      if (result && result.value) {
+        existingMessages = JSON.parse(result.value);
+      }
+    } catch (e) {
+      // Key doesn't exist yet, that's fine
+    }
+    
+    // Add new message
+    existingMessages.push(messageData);
+    
+    // Save back to shared storage
+    await window.storage.set(inboxKey, JSON.stringify(existingMessages), true);
+  } catch (error) {
+    console.error('Failed to send message:', error);
+    showToast('Failed to send message - please try again');
+  }
+}
+
 // Logout
 document.getElementById('logoutBtn').addEventListener('click', () => {
   showConfirm(
