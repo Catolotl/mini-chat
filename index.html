@@ -511,31 +511,47 @@ function startAutoLoad() {
 }
 
 async function checkForMessages() {
-  // Check all contacts for potential messages
-  for (const contactId of Object.keys(contacts)) {
+  // Check for messages from ALL possible senders
+  const allUserIds = Object.keys(VALID_CODES).map(code => VALID_CODES[code].id);
+  
+  for (const senderId of allUserIds) {
+    if (senderId === currentUser) continue; // Skip checking from yourself
+    
     try {
       // Check for messages in shared storage
-      const inboxKey = `inbox_${currentUser}_from_${contactId}`;
+      const inboxKey = `inbox_${currentUser}_from_${senderId}`;
       const result = await window.storage.get(inboxKey, true);
       
       if (result && result.value) {
         const msgList = JSON.parse(result.value);
         
         msgList.forEach(msg => {
-          if (!messages[contactId]) {
-            messages[contactId] = [];
+          // If we don't have this sender as a contact yet, auto-add them
+          if (!contacts[senderId]) {
+            const senderCode = Object.keys(VALID_CODES).find(
+              code => VALID_CODES[code].id === senderId
+            );
+            const senderName = VALID_CODES[senderCode].name;
+            contacts[senderId] = {
+              name: senderName,
+              code: senderCode
+            };
+          }
+          
+          if (!messages[senderId]) {
+            messages[senderId] = [];
           }
           
           // Only add if we don't already have this message
-          if (!messages[contactId].find(m => m.id === msg.id)) {
-            messages[contactId].push(msg);
-            showToast(`New message from ${contacts[contactId].name}!`);
+          if (!messages[senderId].find(m => m.id === msg.id)) {
+            messages[senderId].push(msg);
+            showToast(`New message from ${contacts[senderId].name}!`);
           }
         });
         
         saveUserData();
         renderContacts();
-        if (currentChatContact === contactId) {
+        if (currentChatContact === senderId) {
           renderMessages();
         }
         
