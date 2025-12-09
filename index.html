@@ -697,29 +697,71 @@ contactPassword.addEventListener('input', () => {
   if (VALID_CODES[code]) {
     const userData = VALID_CODES[code];
     const userId = userData.id;
-    
+
     if (userId === currentUser) {
       showToast("You can't add yourself!");
       contactPassword.value = '';
       return;
     }
-    
-    contacts[userId] = {
-      name: userData.name,
-      code: code
-    };
-    
-    if (!messages[userId]) {
-      messages[userId] = [];
-    }
-    
-    saveUserData();
-    showToast(`${userData.name} added!`);
-    
-    setTimeout(() => {
+
+    // Hide password stage, show name input
+    contactPasswordStage.classList.remove('visible');
+    document.getElementById('contactStatus').textContent = "Card verified! Now enter their name:";
+    document.getElementById('contactStatus').style.color = "#0f9";
+
+    // Create name input field
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.placeholder = "Enter their name (e.g. Alex, Mom, etc.)";
+    nameInput.style.cssText = `
+      margin-top: 20px;
+      padding: 18px;
+      font-size: 1.4rem;
+      background: #111;
+      color: #0f9;
+      border: 2px solid #0f9;
+      border-radius: 16px;
+      width: 340px;
+      text-align: center;
+    `;
+
+    const doneBtn = document.createElement('button');
+    doneBtn.textContent = "Add Contact";
+    doneBtn.className = "btn";
+    doneBtn.style.marginTop = "20px";
+
+    // Clear old content and add new fields
+    const container = document.querySelector('#contactPasswordStage');
+    container.innerHTML = '';
+    container.appendChild(nameInput);
+    container.appendChild(doneBtn);
+    container.classList.add('visible');
+    nameInput.focus();
+
+    doneBtn.onclick = () => {
+      const displayName = nameInput.value.trim();
+      if (!displayName) {
+        showToast("Please enter a name!");
+        return;
+      }
+
+      contacts[userId] = {
+        name: displayName,
+        code: code
+      };
+
+      if (!messages[userId]) messages[userId] = [];
+
+      saveUserData();
+      showToast(`${displayName} added!`);
       addContactScreen.style.display = 'none';
       renderContacts();
-    }, 350);
+    };
+
+    // Allow pressing Enter
+    nameInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') doneBtn.click();
+    });
   }
 });
 
