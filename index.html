@@ -801,29 +801,34 @@ composeInput.addEventListener('keypress', (e) => {
 function sendMessage() {
   const text = composeInput.value.trim();
   if (!text || !currentChatContact) return;
-  
-  // Create message object
+
   const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   const messageData = {
     id: msgId,
-    from: currentUser,
+    from: currentUser,        // This is YOU
     msg: text,
     time: new Date().toISOString(),
-    read: false
+    read: true                // You’ve already "read" your own message
   };
-  
-  // Store in recipient's pending messages
-  const pendingKey = `blade_pending_${currentChatContact}_from_${currentUser}`;
-  const existingPending = localStorage.getItem(pendingKey);
-  const pendingList = existingPending ? JSON.parse(existingPending) : [];
-  pendingList.push(messageData);
-  localStorage.setItem(pendingKey, JSON.stringify(pendingList));
-  
-  showToast('Message sent!');
-  
-  composeInput.value = '';
-};
 
+  // Add to YOUR chat history instantly
+  if (!messages[currentChatContact]) messages[currentChatContact] = [];
+  messages[currentChatContact].push(messageData);
+
+  // Also send to their pending inbox
+  const pendingKey = `blade_pending_${currentChatContact}_from_${currentUser}`;
+  const existing = localStorage.getItem(pendingKey) || '[]';
+  const list = JSON.parse(existing);
+  list.push(messageData);
+  localStorage.setItem(pendingKey, JSON.stringify(list));
+
+  saveUserData();
+  renderMessages();           // Show it immediately on the right
+  renderContacts();
+
+  composeInput.value = '';
+  showToast('Message sent!');
+}
 // Logout
 document.getElementById('logoutBtn').addEventListener('click', () => {
   showConfirm(
