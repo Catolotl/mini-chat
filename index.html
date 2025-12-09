@@ -5,79 +5,276 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Blade Messages</title>
 <style>
-  body, html {margin:0;padding:0;height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden;}
-  #loginScreen, #addContactScreen {position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;z-index:1000;}
-  #addContactScreen {display:none;}
-  h1 {font-size:3.2rem;font-weight:800;background:linear-gradient(135deg,#fff,#ccc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:0 0 40px;letter-spacing:-1.5px;}
+  body, html {
+    margin:0;padding:0;height:100%;background:#000;color:#fff;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    overflow:hidden;
+  }
+  
+  /* Login Screen */
+  #loginScreen, #addContactScreen {
+    position:fixed;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    background:#000;
+    z-index:1000;
+  }
+  
+  #addContactScreen {
+    display:none;
+  }
+  
+  h1 {
+    font-size:3.2rem;font-weight:800;
+    background:linear-gradient(135deg,#fff,#ccc);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    margin:0 0 40px;letter-spacing:-1.5px;
+  }
   .chip-icon {font-size:4rem;margin-bottom:20px;opacity:0.9;}
-  .instruction {font-size:1.25rem;line-height:1.6;opacity:0.85;max-width:500px;text-align:center;}
+  .instruction {
+    font-size:1.25rem;line-height:1.6;opacity:0.85;max-width:500px;text-align:center;
+  }
   .status {margin-top:28px;font-size:1.1rem;min-height:32px;}
-  .btn {margin-top:40px;padding:16px 56px;font-size:1.2rem;font-weight:600;background:transparent;color:#fff;border:2px solid #555;border-radius:18px;cursor:pointer;transition:all .35s;}
+  .btn {
+    margin-top:40px;padding:16px 56px;font-size:1.2rem;font-weight:600;
+    background:transparent;color:#fff;border:2px solid #555;border-radius:18px;
+    cursor:pointer;transition:all 0.35s ease;
+  }
   .btn:disabled {opacity:0.5;cursor:not-allowed;}
   .btn:hover:not(:disabled) {border-color:#0f9;box-shadow:0 0 40px rgba(0,255,150,0.35);}
   .btn:active:not(:disabled) {transform:scale(0.95);}
-  .scan-glow {position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle at center,rgba(0,255,150,0.2) 0%,transparent 70%);opacity:0;}
-  #loginScreen.scanning .scan-glow, #addContactScreen.scanning .scan-glow {opacity:1;animation:greenPulse 1.8s infinite;}
-  @keyframes greenPulse {0%,100%{opacity:0.4;transform:scale(1)}50%{opacity:0.9;transform:scale(1.18)}}
-  #passwordStage, #contactPasswordStage {position:fixed;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;visibility:hidden;z-index:10;transition:opacity .8s;}
+  .scan-glow {
+    position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:radial-gradient(circle at center, rgba(0,255,150,0.2) 0%, transparent 70%);
+    opacity:0;
+  }
+  
+  #loginScreen.scanning .scan-glow,
+  #addContactScreen.scanning .scan-glow {
+    opacity:1;animation:greenPulse 1.8s infinite;
+  }
+  
+  @keyframes greenPulse {
+    0%,100% {opacity:0.4;transform:scale(1);}
+    50% {opacity:0.9;transform:scale(1.18);}
+  }
+  
+  #passwordStage, #contactPasswordStage {
+    position:fixed;inset:0;background:#000;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    opacity:0;visibility:hidden;z-index:10;transition:opacity 0.8s ease;
+  }
   #passwordStage.visible, #contactPasswordStage.visible {opacity:1;visibility:visible;}
-  #loginScreen.step2 h1,#loginScreen.step2 .chip-icon,#loginScreen.step2 .instruction,#loginScreen.step2 .status,#loginScreen.step2 .btn,
-  #addContactScreen.step2 h1,#addContactScreen.step2 .chip-icon,#addContactScreen.step2 .instruction,#addContactScreen.step2 .status,#addContactScreen.step2 .btn {opacity:0;transition:opacity .5s;}
-  #loginScreen.step2 .scan-glow,#addContactScreen.step2 .scan-glow {opacity:0!important;}
-  input {padding:20px;font-size:2rem;letter-spacing:12px;text-align:center;background:#111;color:#fff;border:2px solid #444;border-radius:16px;width:340px;}
+  
+  #loginScreen.step2 h1, 
+  #loginScreen.step2 .chip-icon, 
+  #loginScreen.step2 .instruction,
+  #loginScreen.step2 .status, 
+  #loginScreen.step2 .btn,
+  #addContactScreen.step2 h1, 
+  #addContactScreen.step2 .chip-icon,
+  #addContactScreen.step2 .instruction, 
+  #addContactScreen.step2 .status,
+  #addContactScreen.step2 .btn {
+    opacity:0;transition:opacity 0.5s ease;
+  }
+  
+  #loginScreen.step2 .scan-glow,
+  #addContactScreen.step2 .scan-glow {
+    opacity:0 !important;transition:opacity 0.5s ease;
+  }
+  
+  input {
+    padding:20px;font-size:2rem;letter-spacing:12px;text-align:center;
+    background:#111;color:#fff;border:2px solid #444;border-radius:16px;width:340px;
+  }
   input:focus {outline:none;border-color:#0f9;box-shadow:0 0 30px rgba(0,255,150,0.3);}
-  #mainApp {display:none;position:fixed;inset:0;}
+  
+  /* Main App with Sidebar */
+  #mainApp {
+    display:none;
+    position:fixed;
+    inset:0;
+  }
   #mainApp.active {display:flex;}
-  .app-container {display:flex;width:100%;height:100vh;}
-  .sidebar {width:320px;background:#0a0a0a;border-right:2px solid #222;display:flex;flex-direction:column;height:100vh;}
-  .sidebar-header {background:#111;padding:20px;border-bottom:2px solid #222;}
+  
+  .app-container {
+    display:flex;
+    width:100%;
+    height:100vh;
+  }
+  
+  /* Sidebar */
+  .sidebar {
+    width:320px;background:#0a0a0a;border-right:2px solid #222;
+    display:flex;flex-direction:column;
+    height:100vh;
+  }
+  .sidebar-header {
+    background:#111;padding:20px;border-bottom:2px solid #222;
+  }
   .sidebar-header h2 {margin:0 0 15px;font-size:1.6rem;}
   .sidebar-btns {display:flex;gap:8px;flex-wrap:wrap;}
-  .sidebar-btn {padding:8px 14px;background:#222;border:1px solid #444;border-radius:6px;cursor:pointer;transition:all .2s;font-size:.9rem;}
+  .sidebar-btn {
+    padding:8px 14px;background:#222;border:1px solid #444;
+    border-radius:6px;cursor:pointer;transition:all 0.2s;font-size:0.9rem;
+  }
   .sidebar-btn:hover {background:#333;border-color:#0f9;}
+  
   .contact-list {flex:1;overflow-y:auto;padding:10px;}
-  .contact-card {background:#111;padding:16px;border-radius:10px;margin-bottom:10px;border:2px solid #222;cursor:pointer;transition:all .3s;}
+  .contact-card {
+    background:#111;padding:16px;border-radius:10px;margin-bottom:10px;
+    border:2px solid #222;cursor:pointer;transition:all 0.3s;
+  }
   .contact-card:hover {border-color:#0f9;box-shadow:0 0 15px rgba(0,255,150,0.15);}
   .contact-card.active {border-color:#0f9;background:#151515;}
   .contact-name {font-size:1.2rem;font-weight:600;margin-bottom:5px;}
-  .contact-preview {font-size:.85rem;opacity:.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .contact-preview {font-size:0.85rem;opacity:0.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .contact-header {display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
-  .unread-badge {background:#0f9;color:#000;padding:4px 10px;border-radius:12px;font-weight:700;font-size:.8rem;}
-  .delete-contact-btn {padding:6px 12px;background:#f33;border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:.85rem;margin-top:10px;}
+  .unread-badge {
+    background:#0f9;color:#000;padding:4px 10px;
+    border-radius:12px;font-weight:700;font-size:0.8rem;
+  }
+  .delete-contact-btn {
+    padding:6px 12px;background:#f33;border:none;
+    border-radius:6px;color:#fff;cursor:pointer;font-size:0.85rem;
+    margin-top:10px;
+  }
   .delete-contact-btn:hover {background:#f55;}
-  .main-content {flex:1;display:flex;flex-direction:column;height:100vh;background:#050505;}
-  .chat-header {background:#111;padding:20px;border-bottom:2px solid #222;}
+  
+  /* Main Chat Area */
+  .main-content {
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    background:#050505;
+  }
+  
+  .chat-header {
+    background:#111;padding:20px;border-bottom:2px solid #222;
+  }
   .chat-header h3 {margin:0;font-size:1.8rem;}
-  .messages-container {flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px;}
-  .message {max-width:70%;padding:16px;border-radius:12px;word-wrap:break-word;}
-  .message.sent {align-self:flex-end;background:#0f9;color:#000;}
-  .message.received {align-self:flex-start;background:#1a1a1a;color:#fff;border:1px solid #222;}
-  .message-time {font-size:.75rem;opacity:.6;margin-top:6px;}
-  .reply-indicator {opacity:.6;font-size:.85rem;margin-bottom:8px;padding:8px;background:rgba(0,0,0,0.3);border-radius:6px;}
-  .compose-area {background:#111;padding:20px;border-top:2px solid #222;display:flex;gap:12px;align-items:center;}
-  .compose-input {flex:1;padding:14px;background:#222;border:2px solid #333;border-radius:8px;color:#fff;font-size:1rem;}
+  
+  .messages-container {
+    flex:1;overflow-y:auto;padding:20px;display:flex;
+    flex-direction:column;gap:16px;
+  }
+  .message {
+    max-width:70%;padding:16px;border-radius:12px;word-wrap:break-word;
+  }
+  .message.sent {
+    align-self:flex-end;background:#0f9;color:#000;
+  }
+  .message.received {
+    align-self:flex-start;background:#1a1a1a;color:#fff;border:1px solid #222;
+  }
+  .message-time {font-size:0.75rem;opacity:0.6;margin-top:6px;}
+  .message-actions {margin-top:10px;display:flex;gap:8px;}
+  .reply-btn, .delete-msg-btn {
+    padding:6px 12px;border-radius:6px;cursor:pointer;
+    font-size:0.85rem;border:1px solid #444;background:#111;
+  }
+  .reply-btn:hover {background:#222;border-color:#0f9;}
+  .delete-msg-btn {border-color:#f33;}
+  .delete-msg-btn:hover {background:#f33;color:#fff;}
+  .reply-indicator {
+    opacity:0.6;font-size:0.85rem;margin-bottom:8px;
+    padding:8px;background:rgba(0,0,0,0.3);border-radius:6px;
+  }
+  
+  .compose-area {
+    background:#111;padding:20px;border-top:2px solid #222;
+    display:flex;gap:12px;align-items:center;
+  }
+  .compose-input {
+    flex:1;padding:14px;background:#222;border:2px solid #333;
+    border-radius:8px;color:#fff;font-size:1rem;
+  }
   .compose-input:focus {outline:none;border-color:#0f9;}
-  .send-btn {padding:14px 28px;background:#0f9;color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer;transition:all .2s;}
+  .send-btn {
+    padding:14px 28px;background:#0f9;color:#000;
+    border:none;border-radius:8px;font-weight:700;
+    cursor:pointer;transition:all 0.2s;
+  }
   .send-btn:hover {box-shadow:0 0 20px rgba(0,255,150,0.4);}
-  #welcomeView {flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;}
-  #chatView {display:none;flex-direction:column;height:100vh;}
-  #chatView.active {display:flex;}
-  .modal {position:fixed;inset:0;background:rgba(0,0,0,0.9);display:none;align-items:center;justify-content:center;z-index:2000;}
+  
+  /* Welcome View */
+  #welcomeView {
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+  }
+  
+  #chatView {
+    display:none;
+    flex-direction:column;
+    height:100vh;
+  }
+  
+  #chatView.active {
+    display:flex;
+  }
+  
+  /* Confirmation Modal */
+  .modal {
+    position:fixed;inset:0;background:rgba(0,0,0,0.9);
+    display:none;align-items:center;justify-content:center;z-index:2000;
+  }
   .modal.active {display:flex;}
-  .modal-content {background:#111;padding:40px;border-radius:16px;border:2px solid #333;max-width:500px;width:90%;}
+  .modal-content {
+    background:#111;padding:40px;border-radius:16px;
+    border:2px solid #333;max-width:500px;width:90%;
+  }
   .modal-title {font-size:1.8rem;margin-bottom:20px;text-align:center;}
-  .modal-message {font-size:1.1rem;opacity:0.8;text-align:center;margin-bottom:30px;line-height:1.5;}
+  .modal-message {
+    font-size:1.1rem;opacity:0.8;text-align:center;margin-bottom:30px;
+    line-height:1.5;
+  }
   .modal-btns {display:flex;gap:12px;justify-content:center;}
-  .modal-btn {padding:14px 32px;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:600;transition:all .2s;border:none;}
+  .modal-btn {
+    padding:14px 32px;border-radius:8px;cursor:pointer;
+    font-size:1rem;font-weight:600;transition:all 0.2s;
+    border:none;
+  }
   .modal-btn.primary {background:#0f9;color:#000;}
   .modal-btn.primary:hover {box-shadow:0 0 20px rgba(0,255,150,0.4);}
   .modal-btn.danger {background:#f33;color:#fff;}
   .modal-btn.danger:hover {background:#f55;}
   .modal-btn.secondary {background:#222;color:#fff;border:2px solid #444;}
   .modal-btn.secondary:hover {border-color:#666;}
-  .toast {position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(150px);background:#0f9;color:#000;padding:16px 32px;border-radius:12px;font-weight:600;font-size:1rem;z-index:3000;opacity:0;transition:all .4s;box-shadow:0 10px 40px rgba(0,255,150,0.4);}
-  .toast.show {opacity:1;transform:translateX(-50%) translateY(0);}
-  .empty-state {text-align:center;padding:60px 20px;opacity:.6;}
+  
+  /* Toast Notification */
+  .toast {
+    position:fixed;
+    bottom:30px;
+    left:50%;
+    transform:translateX(-50%) translateY(150px);
+    background:#0f9;
+    color:#000;
+    padding:16px 32px;
+    border-radius:12px;
+    font-weight:600;
+    font-size:1rem;
+    z-index:3000;
+    opacity:0;
+    transition:all 0.4s ease;
+    box-shadow:0 10px 40px rgba(0,255,150,0.4);
+  }
+  .toast.show {
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+  }
+  
+  .hidden {display:none;}
+  .empty-state {
+    text-align:center;padding:60px 20px;opacity:0.6;
+  }
   .empty-state-icon {font-size:4rem;margin-bottom:20px;}
 </style>
 </head>
@@ -85,11 +282,14 @@
 
 <div id="loginScreen">
   <h1>BLADE MESSAGES</h1>
-  <div class="chip-icon">Card</div>
-  <div class="instruction">Hold your Blade Card to the right of your Trackpad or on your camera</div>
+  <div class="chip-icon">💳</div>
+  <div class="instruction">
+    Hold your Blade Card to the right of your Trackpad or on your camera
+  </div>
   <div class="status" id="status"></div>
   <button class="btn" id="tapBtn">Tap Card and press button to continue</button>
   <div class="scan-glow"></div>
+  
   <div id="passwordStage">
     <input type="text" id="loginPassword" maxlength="20" placeholder="•••••••••••••••••" autocomplete="off">
     <p style="margin-top:18px;opacity:0.6;font-size:0.95rem;">Two Step Log In: Enter the code on your card</p>
@@ -98,11 +298,14 @@
 
 <div id="addContactScreen">
   <h1>ADD CONTACT</h1>
-  <div class="chip-icon">Card</div>
-  <div class="instruction">Ask them to hold their Blade Card to scan</div>
+  <div class="chip-icon">💳</div>
+  <div class="instruction">
+    Ask them to hold their Blade Card to scan
+  </div>
   <div class="status" id="contactStatus"></div>
   <button class="btn" id="tapContactBtn">Scan to add contact</button>
   <div class="scan-glow"></div>
+  
   <div id="contactPasswordStage">
     <input type="text" id="contactPassword" maxlength="20" placeholder="•••••••••••••••••" autocomplete="off">
     <p style="margin-top:18px;opacity:0.6;font-size:0.95rem;">Two Step Add: They enter their card code</p>
@@ -121,19 +324,21 @@
       </div>
       <div class="contact-list" id="contactList">
         <div class="empty-state">
-          <div class="empty-state-icon">Chat</div>
+          <div class="empty-state-icon">💬</div>
           <p>No contacts yet</p>
         </div>
       </div>
     </div>
+    
     <div class="main-content">
       <div id="welcomeView">
         <div class="empty-state">
-          <div class="empty-state-icon">Envelope</div>
+          <div class="empty-state-icon">✉️</div>
           <h2 style="margin:20px 0;">Welcome to Blade Messages</h2>
           <p>Select a contact to start messaging</p>
         </div>
       </div>
+      
       <div id="chatView">
         <div class="chat-header">
           <h3 id="chatContactName">Select a contact</h3>
@@ -148,6 +353,7 @@
   </div>
 </div>
 
+<!-- Confirmation Modal -->
 <div class="modal" id="confirmModal">
   <div class="modal-content">
     <div class="modal-title" id="confirmTitle">Confirm</div>
@@ -158,14 +364,11 @@
     </div>
   </div>
 </div>
-</div>
 
+<!-- Toast Notification -->
 <div class="toast" id="toast"></div>
 
 <script>
-// CHANGE THIS TO YOUR SECRET CHANNEL NAME (share with friends only!)
-const GLOBAL_CHANNEL = "blade-messages-2025-secret-42069";
-
 const VALID_CODES = {
   "cutedrunkraccoons": {id: "User_Alpha", name: "CuteDrunkRaccoons"},
   "blade": {id: "User_Blade", name: "Blade"},
@@ -190,105 +393,65 @@ let currentUser = null;
 let contacts = {};
 let messages = {};
 let currentChatContact = null;
+let autoLoadInterval = null;
 
-// Toast
+// Toast Notification
 function showToast(message) {
   const toast = document.getElementById('toast');
   toast.textContent = message;
   toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 3000);
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 3000);
 }
 
-// Modal
+// Confirmation Modal
 function showConfirm(title, message, onConfirm, isDanger = false) {
   const modal = document.getElementById('confirmModal');
-  document.getElementById('confirmTitle').textContent = title;
-  document.getElementById('confirmMessage').textContent = message;
-  const yes = document.getElementById('confirmYes');
-  yes.className = isDanger ? 'modal-btn danger' : 'modal-btn primary';
+  const confirmTitle = document.getElementById('confirmTitle');
+  const confirmMessage = document.getElementById('confirmMessage');
+  const confirmYes = document.getElementById('confirmYes');
+  const confirmNo = document.getElementById('confirmNo');
+  
+  confirmTitle.textContent = title;
+  confirmMessage.textContent = message;
+  confirmYes.className = isDanger ? 'modal-btn danger' : 'modal-btn primary';
+  
   modal.classList.add('active');
-  const y = () => { modal.classList.remove('active'); onConfirm(); c(); };
-  const n = () => { modal.classList.remove('active'); c(); };
-  const c = () => { yes.removeEventListener('click', y); document.getElementById('confirmNo').removeEventListener('click', n); };
-  yes.addEventListener('click', y);
-  document.getElementById('confirmNo').addEventListener('click', n);
-}
-
-// Data
-function loadUserData() {
-  const c = localStorage.getItem(`blade_contacts_${currentUser}`);
-  const m = localStorage.getItem(`blade_messages_${currentUser}`);
-  contacts = c ? JSON.parse(c) : {};
-  messages = m ? JSON.parse(m) : {};
-}
-function saveUserData() {
-  localStorage.setItem(`blade_contacts_${currentUser}`, JSON.stringify(contacts));
-  localStorage.setItem(`blade_messages_${currentUser}`, JSON.stringify(messages));
-}
-
-// GLOBAL REAL-TIME LISTENER
-function initGlobalListener() {
-  const es = new EventSource(`https://ntfy.sh/${GLOBAL_CHANNEL}/sse`);
-  es.onmessage = (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      if (msg.from === currentUser || !contacts[msg.from]) return;
-      const id = msg.from;
-      if (!messages[id]) messages[id] = [];
-      if (!messages[id].find(m => m.id === msg.id)) {
-        messages[id].push(msg);
-        saveUserData();
-        renderContacts();
-        if (currentChatContact === id) renderMessages();
-        showToast(`New message from ${contacts[id].name}!`);
-      }
-    } catch (e) {}
+  
+  const handleYes = () => {
+    modal.classList.remove('active');
+    onConfirm();
+    confirmYes.removeEventListener('click', handleYes);
+    confirmNo.removeEventListener('click', handleNo);
   };
-}
-
-// SEND MESSAGE — NOW WORKS WORLDWIDE
-function sendMessage() {
-  const text = document.getElementById('composeInput').value.trim();
-  if (!text || !currentChatContact) return;
-
-  const msg = {
-    id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2,9),
-    from: currentUser,
-    msg: text,
-    time: new Date().toISOString(),
-    read: true
+  
+  const handleNo = () => {
+    modal.classList.remove('active');
+    confirmYes.removeEventListener('click', handleYes);
+    confirmNo.removeEventListener('click', handleNo);
   };
-
-  if (!messages[currentChatContact]) messages[currentChatContact] = [];
-  messages[currentChatContact].push(msg);
-  renderMessages();
-  saveUserData();
-  document.getElementById('composeInput').value = '';
-  showToast('Sent worldwide!');
-
-  fetch(`https://ntfy.sh/${GLOBAL_CHANNEL}`, {
-    method: 'POST',
-    body: JSON.stringify(msg),
-    headers: { 'Title': currentUser }
-  });
+  
+  confirmYes.addEventListener('click', handleYes);
+  confirmNo.addEventListener('click', handleNo);
 }
 
-// Check saved login
+// Check for saved login
 function checkSavedLogin() {
-  const saved = localStorage.getItem('blade_current_user');
-  if (saved) {
-    currentUser = saved;
+  const savedUser = localStorage.getItem('blade_current_user');
+  if (savedUser) {
+    currentUser = savedUser;
     loadUserData();
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('mainApp').classList.add('active');
     renderContacts();
-    initGlobalListener();
+    startAutoLoad();
     return true;
   }
   return false;
 }
 
-// Login flow
+// Login Flow
 const status = document.getElementById('status');
 const tapBtn = document.getElementById('tapBtn');
 const passwordStage = document.getElementById('passwordStage');
@@ -301,26 +464,26 @@ if (!checkSavedLogin()) {
     tapBtn.disabled = true;
     status.textContent = "Reading card…";
     status.style.color = "#ccc";
+
     setTimeout(() => {
-      {
-        if (Math.random() < 0.70) {
-          status.textContent = "Card recognized";
-          status.style.color = "#0f9";
+      if (Math.random() < 0.70) {
+        status.textContent = "Card recognized";
+        status.style.color = "#0f9";
+        setTimeout(() => {
+          loginScreen.classList.add('step2');
           setTimeout(() => {
-            loginScreen.classList.add('step2');
-            setTimeout(() => {
-              passwordStage.classList.add('visible');
-              loginPassword.focus();
-            }, 500);
-          }, 600);
-        } else {
-          loginScreen.classList.remove('scanning');
-          status.textContent = "Not recognized – try again";
-          status.style.color = "#f66";
-          tapBtn.disabled = false;
-          setTimeout(() => status.textContent = "", 2200);
-        }
-      }, 2100);
+            passwordStage.classList.add('visible');
+            loginPassword.focus();
+          }, 500);
+        }, 600);
+      } else {
+        loginScreen.classList.remove('scanning');
+        status.textContent = "Not recognized – try again";
+        status.style.color = "#f66";
+        tapBtn.disabled = false;
+        setTimeout(() => status.textContent = "", 2200);
+      }
+    }, 2100);
   });
 
   loginPassword.addEventListener('input', () => {
@@ -333,176 +496,353 @@ if (!checkSavedLogin()) {
         loginScreen.style.display = 'none';
         document.getElementById('mainApp').classList.add('active');
         renderContacts();
-        initGlobalListener();
+        startAutoLoad();
       }, 350);
     }
   });
 }
 
-// Contacts rendering
-function renderContacts() {
-  const list = document.getElementById('contactList');
-  list.innerHTML = '';
-  const keys = Object.keys(contacts);
-  if (keys.length === 0) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">Chat</div><p>No contacts yet</p></div>`;
-    return;
-  }
-  keys.forEach(id => {
-    const c = contacts[id];
-    const unread = messages[id] ? messages[id].filter(m => m.from === id && !m.read).length : 0;
-    const last = getLastMessage(id);
-    const card = document.createElement('div');
-    card.className = 'contact-card' + (currentChatContact === id ? ' active' : '');
-    card.innerHTML = `
-      <div class="contact-header">
-        <div class="contact-name">${c.name}</div>
-        ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
-      </div>
-      <div class="contact-preview">${last || 'No messages yet'}</div>
-      <button class="delete-contact-btn" onclick="event.stopPropagation(); deleteContact('${id}')">Delete</button>
-    `;
-    card.onclick = () => openChat(id);
-    list.appendChild(card);
+// Auto-load messages from URL
+function startAutoLoad() {
+  checkForMessages();
+  autoLoadInterval = setInterval(checkForMessages, 1000); // Check every second
+}
+
+function checkForMessages() {
+  // Check all contacts for potential messages
+  Object.keys(contacts).forEach(contactId => {
+    // Simulate checking for new messages from this contact
+    // In a real system, this would check a server or shared storage
+    const pendingKey = `blade_pending_${currentUser}_from_${contactId}`;
+    const pendingMessages = localStorage.getItem(pendingKey);
+    
+    if (pendingMessages) {
+      const msgList = JSON.parse(pendingMessages);
+      msgList.forEach(msg => {
+        if (!messages[contactId]) {
+          messages[contactId] = [];
+        }
+        
+        if (!messages[contactId].find(m => m.id === msg.id)) {
+          messages[contactId].push(msg);
+          showToast(`New message from ${contacts[contactId].name}!`);
+        }
+      });
+      
+      saveUserData();
+      renderContacts();
+      if (currentChatContact === contactId) {
+        renderMessages();
+      }
+      
+      // Clear pending messages after loading
+      localStorage.removeItem(pendingKey);
+    }
   });
 }
 
-function getLastMessage(id) {
-  if (!messages[id] || messages[id].length === 0) return '';
-  const m = messages[id][messages[id].length-1];
-  return m.msg.substring(0,50) + (m.msg.length > 50 ? '...' : '');
+// Data Management
+function loadUserData() {
+  const savedContacts = localStorage.getItem(`blade_contacts_${currentUser}`);
+  const savedMessages = localStorage.getItem(`blade_messages_${currentUser}`);
+  contacts = savedContacts ? JSON.parse(savedContacts) : {};
+  messages = savedMessages ? JSON.parse(savedMessages) : {};
 }
 
-// Chat
-function openChat(id) {
-  currentChatContact = id;
+function saveUserData() {
+  localStorage.setItem(`blade_contacts_${currentUser}`, JSON.stringify(contacts));
+  localStorage.setItem(`blade_messages_${currentUser}`, JSON.stringify(messages));
+}
+
+// Encoding/Decoding (kept for compatibility but not used for sending)
+function encodeMessage(to, from, message, replyToId = null) {
+  const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  const data = {
+    to: to,
+    from: from,
+    msg: message,
+    id: msgId,
+    reply: replyToId,
+    time: new Date().toISOString()
+  };
+  const encoded = btoa(JSON.stringify(data));
+  return `${window.location.origin}${window.location.pathname}?msg=${encoded}`;
+}
+
+function decodeMessage(url) {
+  try {
+    const encoded = url.includes('?msg=') ? url.split('?msg=')[1] : url.replace('bladem://msg/', '');
+    const decoded = JSON.parse(atob(encoded));
+    return decoded;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Contacts Management
+function renderContacts() {
+  const contactList = document.getElementById('contactList');
+  contactList.innerHTML = '';
+  
+  const contactKeys = Object.keys(contacts);
+  if (contactKeys.length === 0) {
+    contactList.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">💬</div>
+        <p>No contacts yet</p>
+      </div>
+    `;
+    return;
+  }
+  
+  contactKeys.forEach(userId => {
+    const contact = contacts[userId];
+    const unreadCount = getUnreadCount(userId);
+    const lastMsg = getLastMessage(userId);
+    
+    const card = document.createElement('div');
+    card.className = 'contact-card' + (currentChatContact === userId ? ' active' : '');
+    card.innerHTML = `
+      <div class="contact-header">
+        <div class="contact-name">${contact.name}</div>
+        ${unreadCount > 0 ? `<div class="unread-badge">${unreadCount}</div>` : ''}
+      </div>
+      <div class="contact-preview">${lastMsg || 'No messages yet'}</div>
+      <button class="delete-contact-btn" onclick="event.stopPropagation(); deleteContact('${userId}')">Delete</button>
+    `;
+    
+    card.addEventListener('click', () => openChat(userId));
+    contactList.appendChild(card);
+  });
+}
+
+function getLastMessage(userId) {
+  if (!messages[userId] || messages[userId].length === 0) return '';
+  const last = messages[userId][messages[userId].length - 1];
+  return last.msg.substring(0, 50) + (last.msg.length > 50 ? '...' : '');
+}
+
+function getUnreadCount(userId) {
+  if (!messages[userId]) return 0;
+  return messages[userId].filter(m => m.from === userId && !m.read).length;
+}
+
+window.deleteContact = function(userId) {
+  showConfirm(
+    'Delete Contact',
+    `Are you sure you want to delete ${contacts[userId].name}? This will also delete all messages.`,
+    () => {
+      delete contacts[userId];
+      delete messages[userId];
+      if (currentChatContact === userId) {
+        currentChatContact = null;
+        document.getElementById('chatView').classList.remove('active');
+        document.getElementById('welcomeView').style.display = 'flex';
+      }
+      saveUserData();
+      renderContacts();
+      showToast('Contact deleted');
+    },
+    true
+  );
+};
+
+// Add Contact Flow
+const addContactScreen = document.getElementById('addContactScreen');
+const contactStatus = document.getElementById('contactStatus');
+const tapContactBtn = document.getElementById('tapContactBtn');
+const contactPasswordStage = document.getElementById('contactPasswordStage');
+const contactPassword = document.getElementById('contactPassword');
+
+document.getElementById('addContactBtn').addEventListener('click', () => {
+  addContactScreen.style.display = 'flex';
+  addContactScreen.classList.remove('step2', 'scanning');
+  contactPasswordStage.classList.remove('visible');
+  contactPassword.value = '';
+  contactStatus.textContent = '';
+  tapContactBtn.disabled = false;
+});
+
+tapContactBtn.addEventListener('click', () => {
+  addContactScreen.classList.add('scanning');
+  tapContactBtn.disabled = true;
+  contactStatus.textContent = "Reading card…";
+  contactStatus.style.color = "#ccc";
+
+  setTimeout(() => {
+    if (Math.random() < 0.70) {
+      contactStatus.textContent = "Card recognized";
+      contactStatus.style.color = "#0f9";
+      setTimeout(() => {
+        addContactScreen.classList.add('step2');
+        setTimeout(() => {
+          contactPasswordStage.classList.add('visible');
+          contactPassword.focus();
+        }, 500);
+      }, 600);
+    } else {
+      addContactScreen.classList.remove('scanning');
+      contactStatus.textContent = "Not recognized – try again";
+      contactStatus.style.color = "#f66";
+      tapContactBtn.disabled = false;
+      setTimeout(() => contactStatus.textContent = "", 2200);
+    }
+  }, 2100);
+});
+
+contactPassword.addEventListener('input', () => {
+  const code = contactPassword.value.trim().toLowerCase();
+  if (VALID_CODES[code]) {
+    const userData = VALID_CODES[code];
+    const userId = userData.id;
+    
+    if (userId === currentUser) {
+      showToast("You can't add yourself!");
+      contactPassword.value = '';
+      return;
+    }
+    
+    contacts[userId] = {
+      name: userData.name,
+      code: code
+    };
+    
+    if (!messages[userId]) {
+      messages[userId] = [];
+    }
+    
+    saveUserData();
+    showToast(`${userData.name} added!`);
+    
+    setTimeout(() => {
+      addContactScreen.style.display = 'none';
+      renderContacts();
+    }, 350);
+  }
+});
+
+// Chat View
+function openChat(userId) {
+  currentChatContact = userId;
   document.getElementById('welcomeView').style.display = 'none';
   document.getElementById('chatView').classList.add('active');
-  document.getElementById('chatContactName').textContent = contacts[id].name;
-  if (messages[id]) {
-    messages[id].forEach(m => { if (m.from === id) m.read = true; });
+  document.getElementById('chatContactName').textContent = contacts[userId].name;
+  
+  if (messages[userId]) {
+    messages[userId].forEach(m => {
+      if (m.from === userId) m.read = true;
+    });
     saveUserData();
   }
+  
   renderContacts();
   renderMessages();
 }
 
 function renderMessages() {
-  const c = document.getElementById('messagesContainer');
-  c.innerHTML = '';
+  const container = document.getElementById('messagesContainer');
+  container.innerHTML = '';
+  
   if (!messages[currentChatContact] || messages[currentChatContact].length === 0) {
-    c.innerHTML = '<div class="empty-state"><p>No messages yet. Start the conversation!</p></div>';
+    container.innerHTML = '<div class="empty-state"><p>No messages yet. Start the conversation!</p></div>';
     return;
   }
-  messages[currentChatContact].forEach((msg, i) => {
+  
+  messages[currentChatContact].forEach((msg, idx) => {
     const div = document.createElement('div');
     div.className = `message ${msg.from === currentUser ? 'sent' : 'received'}`;
+    
     let content = '';
     if (msg.reply) {
-      const orig = messages[currentChatContact].find(m => m.id === msg.reply);
-      if (orig) content = `<div class="reply-indicator">Reply to: ${orig.msg.substring(0,50)}...</div>`;
+      const replyMsg = messages[currentChatContact].find(m => m.id === msg.reply);
+      if (replyMsg) {
+        content = `<div class="reply-indicator">Reply to: ${replyMsg.msg.substring(0, 50)}...</div>`;
+      }
     }
     content += msg.msg;
+    
     div.innerHTML = `
       ${content}
       <div class="message-time">${new Date(msg.time).toLocaleString()}</div>
       <div class="message-actions">
-        <button class="delete-msg-btn" onclick="deleteMessage(${i})">Delete</button>
+        <button class="delete-msg-btn" onclick="deleteMessage(${idx})">Delete</button>
       </div>
     `;
-    c.appendChild(div);
+    container.appendChild(div);
   });
-  c.scrollTop = c.scrollHeight;
+  
+  container.scrollTop = container.scrollHeight;
 }
 
-window.deleteMessage = function(i) {
-  showConfirm('Delete Message', 'Are you sure?', () => {
-    messages[currentChatContact].splice(i,1);
-    saveUserData();
-    renderMessages();
-    renderContacts();
-    showToast('Message deleted');
-  }, true);
+window.deleteMessage = function(idx) {
+  showConfirm(
+    'Delete Message',
+    'Are you sure you want to delete this message?',
+    () => {
+      messages[currentChatContact].splice(idx, 1);
+      saveUserData();
+      renderMessages();
+      renderContacts();
+      showToast('Message deleted');
+    },
+    true
+  );
 };
 
-// Add contact flow
-document.getElementById('addContactBtn').addEventListener('click', () => {
-  document.getElementById('addContactScreen').style.display = 'flex';
-});
-document.getElementById('tapContactBtn').addEventListener('click', () => {
-  const s = document.getElementById('addContactScreen');
-  s.classList.add('scanning');
-  document.getElementById('tapContactBtn').disabled = true;
-  document.getElementById('contactStatus').textContent = "Reading card…";
-  setTimeout(() => {
-    if (Math.random() < 0.7) {
-      document.getElementById('contactStatus').textContent = "Card recognized";
-      document.getElementById('contactStatus').style.color = "#0f9";
-      setTimeout(() => {
-        s.classList.add('step2');
-        setTimeout(() => {
-          document.getElementById('contactPasswordStage').classList.add('visible');
-          document.getElementById('contactPassword').focus();
-        }, 500);
-      }, 600);
-    } else {
-      s.classList.remove('scanning');
-      document.getElementById('contactStatus').textContent = "Not recognized – try again";
-      document.getElementById('contactStatus').style.color = "#f66";
-      document.getElementById('tapContactBtn').disabled = false;
-    }
-  }, 2100);
-});
-document.getElementById('contactPassword').addEventListener('input', () => {
-  const code = document.getElementById('contactPassword').value.trim().toLowerCase();
-  if (VALID_CODES[code]) {
-    const u = VALID_CODES[code];
-    if (u.id === currentUser) {
-      showToast("You can't add yourself!");
-      document.getElementById('contactPassword').value = '';
-      return;
-    }
-    contacts[u.id] = {name: u.name};
-    if (!messages[u.id]) messages[u.id] = [];
-    saveUserData();
-    showToast(`${u.name} added!`);
-    document.getElementById('addContactScreen').style.display = 'none';
-    renderContacts();
-  }
-});
+// Send Message
+const composeInput = document.getElementById('composeInput');
+const sendBtn = document.getElementById('sendBtn');
 
-// Delete contact
-window.deleteContact = function(id) {
-  showConfirm('Delete Contact', `Delete ${contacts[id].name} and all messages?`, () => {
-    delete contacts[id];
-    delete messages[id];
-    if (currentChatContact === id) {
-      currentChatContact = null;
-      document.getElementById('chatView').classList.remove('active');
-      document.getElementById('welcomeView').style.display = 'flex';
-    }
-    saveUserData();
-    renderContacts();
-    showToast('Contact deleted');
-  }, true);
-};
-
-// Send button
-document.getElementById('sendBtn').addEventListener('click', sendMessage);
-document.getElementById('composeInput').addEventListener('keypress', e => {
+sendBtn.addEventListener('click', sendMessage);
+composeInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') sendMessage();
 });
 
+function sendMessage() {
+  const text = composeInput.value.trim();
+  if (!text || !currentChatContact) return;
+
+  const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  const messageData = {
+    id: msgId,
+    from: currentUser,        // This is YOU
+    msg: text,
+    time: new Date().toISOString(),
+    read: true                // You’ve already "read" your own message
+  };
+
+  // Add to YOUR chat history instantly
+  if (!messages[currentChatContact]) messages[currentChatContact] = [];
+  messages[currentChatContact].push(messageData);
+
+  // Also send to their pending inbox
+  const pendingKey = `blade_pending_${currentChatContact}_from_${currentUser}`;
+  const existing = localStorage.getItem(pendingKey) || '[]';
+  const list = JSON.parse(existing);
+  list.push(messageData);
+  localStorage.setItem(pendingKey, JSON.stringify(list));
+
+  saveUserData();
+  renderMessages();           // Show it immediately on the right
+  renderContacts();
+
+  composeInput.value = '';
+  showToast('Message sent!');
+}
 // Logout
 document.getElementById('logoutBtn').addEventListener('click', () => {
-  showConfirm('Logout', 'Are you sure?', () => {
-    localStorage.removeItem('blade_current_user');
-    location.reload();
-  });
+  showConfirm(
+    'Logout',
+    'Are you sure you want to logout?',
+    () => {
+      if (autoLoadInterval) clearInterval(autoLoadInterval);
+      localStorage.removeItem('blade_current_user');
+      currentUser = null;
+      location.reload();
+    },
+    false
+  );
 });
-
-// Start global listener on first load
-if (checkSavedLogin()) initGlobalListener();
 </script>
 </body>
 </html>
