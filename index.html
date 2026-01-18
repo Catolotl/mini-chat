@@ -9,20 +9,16 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
-    <!-- Emoji Picker (small web component) -->
+    <!-- Emoji Picker -->
     <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.min.js"></script>
+    <!-- Firebase Compat SDKs (fixes firebase not defined) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore-compat.js"></script>
     <style>
         body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
-        .glass {
-            background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-        }
-        .glass-dark {
-            background: rgba(30, 30, 40, 0.7);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-        }
+        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+        .glass-dark { background: rgba(30, 30, 40, 0.7); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
         .message-bubble { max-width: 70%; word-wrap: break-word; }
         .sidebar-item:hover { background: rgba(0, 0, 0, 0.05); }
     </style>
@@ -33,11 +29,24 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        // Your real Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyDJ-sl0-AHlqefEiNHlVmSaSXiqtb7C-Ag",
+            authDomain: "chatapp-4675a.firebaseapp.com",
+            projectId: "chatapp-4675a",
+            storageBucket: "chatapp-4675a.firebasestorage.app",
+            messagingSenderId: "615230017150",
+            appId: "1:615230017150:web:bde99de91d1e6c602c122f",
+            measurementId: "G-P7LETNMPP6"
+        };
+
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore(app);
+
         const STORAGE_KEYS = {
-            PROFILE: 'messages_profile',
-            CONTACTS: 'messages_contacts',
-            MESSAGES: 'messages_history',
-            SETTINGS: 'messages_settings'
+            MESSAGES: 'messages_history'  // still local per device
         };
 
         const UserPlus = () => (
@@ -65,10 +74,9 @@
         }
 
         function MessagesApp() {
+            const [user, setUser] = useState(null);
             const [phoneNumber, setPhoneNumber] = useState('');
             const [username, setUsername] = useState('');
-            const [profilePic, setProfilePic] = useState('');
-            const [isSetup, setIsSetup] = useState(false);
             const [contacts, setContacts] = useState([]);
             const [activeContact, setActiveContact] = useState(null);
             const [messages, setMessages] = useState({});
@@ -78,63 +86,70 @@
             const [newContactName, setNewContactName] = useState('');
             const [replyTo, setReplyTo] = useState(null);
             const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-            const [selectedFile, setSelectedFile] = useState(null);
             const [settings, setSettings] = useState({ darkMode: false, bubbleColor: '#3b82f6' });
+            const [authMode, setAuthMode] = useState('signup');
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [showEditProfile, setShowEditProfile] = useState(false);
+            const [editUsername, setEditUsername] = useState('');
 
             const peerRef = useRef(null);
             const connectionsRef = useRef({});
             const messagesEndRef = useRef(null);
-            const fileInputRef = useRef(null);
 
-            // Load saved data
+            // Auth listener + load/save profile
             useEffect(() => {
-                const savedProfile = localStorage.getItem(STORAGE_KEYS.PROFILE);
-                if (savedProfile) {
-                    const p = JSON.parse(savedProfile);
-                    setUsername(p.username);
-                    setProfilePic(p.profilePic);
-                    setPhoneNumber(p.phoneNumber);
-                    setIsSetup(true);
+                const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+                    setUser(currentUser);
+                    if (currentUser) {
+                        const userDoc = await db.collection('users').doc(currentUser.uid).get();
+                        if (userDoc.exists) {
+                            const data = userDoc.data();
+                            setUsername(data.username || currentUser.email.split('@')[0]);
+                            setPhoneNumber(data.phoneNumber || '');
+                            setContacts(data.contacts || []);
+                            setSettings(data.settings || { darkMode: false, bubbleColor: '#3b82f6' });
 
-                    const peer = new Peer(p.phoneNumber);
-                    peerRef.current = peer;
-                    peer.on('open', () => console.log('Peer reconnected:', p.phoneNumber));
-                    peer.on('connection', setupConnection);
-                    peer.on('error', err => console.error('Peer error:', err));
-                }
+                            if (data.phoneNumber) {
+                                const peer = new Peer(data.phoneNumber);
+                                peerRef.current = peer;
+                                peer.on('open', (id) => console.log('Peer connected:', id));
+                                peer.on('connection', setupConnection);
+                                peer.on('error', err => console.error('Peer error:', err));
+                            }
+                        } else {
+                            // First-time user
+                            const newPhone = generatePhoneNumber();
+                            await db.collection('users').doc(currentUser.uid).set({
+                                username: currentUser.email.split('@')[0],
+                                phoneNumber: newPhone,
+                                contacts: [],
+                                settings: { darkMode: false, bubbleColor: '#3b82f6' }
+                            });
+                            setPhoneNumber(newPhone);
+                            const peer = new Peer(newPhone);
+                            peerRef.current = peer;
+                            peer.on('open', (id) => console.log('New peer ID:', id));
+                            peer.on('connection', setupConnection);
+                        }
 
-                const savedContacts = localStorage.getItem(STORAGE_KEYS.CONTACTS);
-                if (savedContacts) setContacts(JSON.parse(savedContacts));
-
-                const savedMessages = localStorage.getItem(STORAGE_KEYS.MESSAGES);
-                if (savedMessages) setMessages(JSON.parse(savedMessages));
-
-                const savedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-                if (savedSettings) setSettings(JSON.parse(savedSettings));
+                        const savedMsgs = localStorage.getItem(STORAGE_KEYS.MESSAGES);
+                        if (savedMsgs) setMessages(JSON.parse(savedMsgs));
+                    }
+                });
+                return unsubscribe;
             }, []);
 
-            // Auto-save
+            // Save local messages
             useEffect(() => {
-                if (isSetup && username && phoneNumber) {
-                    localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify({ username, profilePic, phoneNumber }));
-                }
-            }, [username, profilePic, phoneNumber, isSetup]);
-
-            useEffect(() => {
-                if (contacts.length > 0) {
-                    localStorage.setItem(STORAGE_KEYS.CONTACTS, JSON.stringify(contacts));
-                }
-            }, [contacts]);
-
-            useEffect(() => {
-                if (Object.keys(messages).length > 0) {
+                if (Object.keys(messages).length) {
                     localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages));
                 }
             }, [messages]);
 
-            useEffect(() => {
-                localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
-            }, [settings]);
+            // Sync contacts & settings to Firestore
+            useEffect(() => { if (user) db.collection('users').doc(user.uid).update({ contacts }); }, [contacts]);
+            useEffect(() => { if (user) db.collection('users').doc(user.uid).update({ settings }); }, [settings]);
 
             useEffect(() => {
                 messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -144,7 +159,7 @@
                 const num = conn.peer;
                 conn.on('open', () => {
                     connectionsRef.current[num] = conn;
-                    conn.send({ type: 'handshake', username, profilePic });
+                    conn.send({ type: 'handshake', username });
                 });
 
                 conn.on('data', (data) => {
@@ -153,7 +168,6 @@
                             setContacts(prev => [...prev, {
                                 number: num,
                                 name: data.username || 'Unknown',
-                                profilePic: data.profilePic || '',
                                 lastMessage: '',
                                 time: '',
                                 unread: 0
@@ -170,24 +184,20 @@
                             replyTo: data.replyTo || null
                         };
 
-                        setMessages(prev => ({
-                            ...prev,
-                            [num]: [...(prev[num] || []), newMsg]
-                        }));
+                        setMessages(prev => ({ ...prev, [num]: [...(prev[num] || []), newMsg] }));
 
                         setContacts(prev => prev.map(c =>
                             c.number === num ? {
                                 ...c,
                                 lastMessage: isImage ? '[Image]' : data.text,
                                 time: newMsg.timestamp,
-                                unread: (activeContact?.number === num ? 0 : (c.unread || 0) + 1)
+                                unread: activeContact?.number === num ? 0 : (c.unread || 0) + 1
                             } : c
                         ));
 
-                        // Desktop notification
                         if (activeContact?.number !== num && Notification.permission === 'granted') {
-                            new Notification(`Message from ${contacts.find(c => c.number === num)?.name || num}`, {
-                                body: isImage ? '[Image]' : (data.text || '').substring(0, 60) + ((data.text || '').length > 60 ? '…' : ''),
+                            new Notification(`New message from ${contacts.find(c => c.number === num)?.name || num}`, {
+                                body: isImage ? '[Image]' : (data.text || '').substring(0,60) + ((data.text || '').length > 60 ? '…' : '')
                             });
                         } else if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
                             Notification.requestPermission();
@@ -195,77 +205,68 @@
                     }
                 });
 
-                conn.on('close', () => {
-                    delete connectionsRef.current[num];
-                });
+                conn.on('close', () => delete connectionsRef.current[num]);
             };
 
-            const initializePeer = () => {
-                if (!username.trim()) {
-                    alert('Please enter your name');
-                    return;
+            const handleSignUp = async () => {
+                try {
+                    await auth.createUserWithEmailAndPassword(email, password);
+                } catch (err) {
+                    alert(err.message);
                 }
-                const generated = generatePhoneNumber();
-                const peer = new Peer(generated);
-                peerRef.current = peer;
+            };
 
-                peer.on('open', (id) => {
-                    setPhoneNumber(id);
-                    setIsSetup(true);
-                });
+            const handleSignIn = async () => {
+                try {
+                    await auth.signInWithEmailAndPassword(email, password);
+                } catch (err) {
+                    alert(err.message);
+                }
+            };
 
-                peer.on('connection', setupConnection);
-                peer.on('error', err => console.error(err));
+            const handleLogout = async () => {
+                await auth.signOut();
+                localStorage.clear();
+                window.location.reload();
+            };
+
+            const handleEditProfile = async () => {
+                if (!user || !editUsername.trim()) return;
+                try {
+                    await db.collection('users').doc(user.uid).update({ username: editUsername.trim() });
+                    setUsername(editUsername.trim());
+                    setShowEditProfile(false);
+                } catch (err) {
+                    alert(err.message);
+                }
             };
 
             const addContact = () => {
                 const num = newContactNumber.trim().toUpperCase().replace(/\s/g, '');
                 if (!num || !newContactName.trim() || !/^\d{4}[A-Z]{4}$/.test(num)) {
-                    alert('Phone number must be 4 digits + 4 uppercase letters (example: 1234ABCD)');
+                    alert('Phone must be 4 digits + 4 uppercase letters (e.g. 1234ABCD)');
                     return;
                 }
-
                 const conn = peerRef.current.connect(num);
                 setupConnection(conn);
-
-                setContacts(prev => [...prev, {
-                    number: num,
-                    name: newContactName.trim(),
-                    profilePic: '',
-                    lastMessage: '',
-                    time: '',
-                    unread: 0
-                }]);
-
+                setContacts(prev => [...prev, { number: num, name: newContactName, lastMessage: '', time: '', unread: 0 }]);
                 setShowAddContact(false);
                 setNewContactNumber('');
                 setNewContactName('');
             };
 
             const sendMessage = async () => {
-                if (!activeContact) return;
-                if (!inputMessage.trim() && !selectedFile) return;
-
+                if (!activeContact || !inputMessage.trim()) return;
                 const conn = connectionsRef.current[activeContact.number];
                 if (!conn?.open) return;
 
-                let content = inputMessage.trim();
+                let finalText = inputMessage;
                 let isImage = false;
-                let finalText = content;
 
-                // Pollinations /imagine command
                 if (inputMessage.startsWith('/imagine ')) {
                     const prompt = inputMessage.slice(9).trim().replace(/\s+/g, '_');
                     finalText = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&nologo=true`;
                     isImage = true;
-                } else if (selectedFile) {
-                    const reader = new FileReader();
-                    finalText = await new Promise(r => {
-                        reader.onload = () => r(reader.result);
-                        reader.readAsDataURL(selectedFile);
-                    });
-                    isImage = true;
-                    setSelectedFile(null);
                 }
 
                 const payload = {
@@ -287,18 +288,10 @@
                     replyTo: payload.replyTo
                 };
 
-                setMessages(prev => ({
-                    ...prev,
-                    [activeContact.number]: [...(prev[activeContact.number] || []), newMsg]
-                }));
+                setMessages(prev => ({ ...prev, [activeContact.number]: [...(prev[activeContact.number] || []), newMsg] }));
 
                 setContacts(prev => prev.map(c =>
-                    c.number === activeContact.number ? {
-                        ...c,
-                        lastMessage: isImage ? '[Image]' : inputMessage,
-                        time: newMsg.timestamp,
-                        unread: 0
-                    } : c
+                    c.number === activeContact.number ? { ...c, lastMessage: isImage ? '[Image]' : inputMessage, time: newMsg.timestamp, unread: 0 } : c
                 ));
 
                 setInputMessage('');
@@ -306,82 +299,68 @@
             };
 
             const deleteContact = (number) => {
-                if (!confirm('Delete contact and all messages?')) return;
+                if (!confirm('Delete this contact and messages?')) return;
                 setContacts(prev => prev.filter(c => c.number !== number));
-                setMessages(prev => { const copy = { ...prev }; delete copy[number]; return copy; });
+                setMessages(prev => { const m = { ...prev }; delete m[number]; return m; });
                 if (activeContact?.number === number) setActiveContact(null);
             };
 
             const editContactName = (number) => {
-                const current = contacts.find(c => c.number === number)?.name || '';
-                const newName = prompt('New contact name:', current);
-                if (newName && newName.trim()) {
-                    setContacts(prev => prev.map(c =>
-                        c.number === number ? { ...c, name: newName.trim() } : c
-                    ));
+                const curr = contacts.find(c => c.number === number)?.name || '';
+                const newName = prompt('New name:', curr);
+                if (newName?.trim()) {
+                    setContacts(prev => prev.map(c => c.number === number ? { ...c, name: newName.trim() } : c));
                 }
             };
 
             const markAsRead = (number) => {
-                setContacts(prev => prev.map(c =>
-                    c.number === number ? { ...c, unread: 0 } : c
-                ));
+                setContacts(prev => prev.map(c => c.number === number ? { ...c, unread: 0 } : c));
             };
 
-            const handleImageSelect = (e) => {
-                if (e.target.files?.[0]) {
-                    setSelectedFile(e.target.files[0]);
-                }
-            };
+            const toggleDarkMode = () => setSettings(s => ({ ...s, darkMode: !s.darkMode }));
 
-            const toggleDarkMode = () => {
-                setSettings(s => ({ ...s, darkMode: !s.darkMode }));
-            };
-
-            if (!isSetup) {
+            if (!user) {
                 return (
                     <div className="min-h-screen bg-gradient-to-br from-blue-100 via-white to-gray-100 flex items-center justify-center p-4">
-                        <div className="glass rounded-3xl shadow-2xl p-8 max-w-md w-full border border-white/50">
+                        <div className="glass rounded-3xl shadow-2xl p-8 max-w-md w-full border border-white">
                             <div className="text-center mb-8">
                                 <h1 className="text-4xl font-semibold text-gray-800 mb-2">Messages</h1>
-                                <p className="text-gray-600">Set up your profile</p>
+                                <p className="text-gray-600">Sign in or create an account</p>
                             </div>
-                            <div className="space-y-6">
-                                <div className="flex justify-center">
-                                    <label className="cursor-pointer">
-                                        <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-lg">
-                                            {profilePic ? (
-                                                <img src={profilePic} alt="Profile" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <span className="text-4xl text-gray-400">📷</span>
-                                            )}
-                                        </div>
-                                        <input type="file" accept="image/*" onChange={e => {
-                                            const file = e.target.files[0];
-                                            if (file) {
-                                                const reader = new FileReader();
-                                                reader.onload = () => setProfilePic(reader.result);
-                                                reader.readAsDataURL(file);
-                                            }
-                                        }} className="hidden" />
-                                    </label>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Your Name</label>
-                                    <input
-                                        type="text"
-                                        value={username}
-                                        onChange={e => setUsername(e.target.value)}
-                                        onKeyPress={e => e.key === 'Enter' && initializePeer()}
-                                        placeholder="Enter your name..."
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                                    />
-                                </div>
+                            <div className="flex justify-center mb-6">
+                                <button 
+                                    onClick={() => setAuthMode('signup')} 
+                                    className={`px-6 py-2 rounded-l-xl ${authMode === 'signup' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+                                >
+                                    Sign Up
+                                </button>
+                                <button 
+                                    onClick={() => setAuthMode('signin')} 
+                                    className={`px-6 py-2 rounded-r-xl ${authMode === 'signin' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+                                >
+                                    Sign In
+                                </button>
+                            </div>
+                            <div className="space-y-4">
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={e => setEmail(e.target.value)}
+                                    placeholder="Email"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={e => setPassword(e.target.value)}
+                                    placeholder="Password"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
                                 <button
-                                    onClick={initializePeer}
+                                    onClick={authMode === 'signup' ? handleSignUp : handleSignIn}
                                     className="w-full bg-blue-500 text-white py-3 rounded-xl font-semibold hover:bg-blue-600 transition-all shadow-lg"
                                 >
-                                    Continue
+                                    {authMode === 'signup' ? 'Create Account' : 'Log In'}
                                 </button>
                             </div>
                         </div>
@@ -396,10 +375,10 @@
                     {/* Sidebar */}
                     <div className={`w-80 border-r flex flex-col ${isDark ? 'bg-gray-800 border-gray-700' : 'glass border-gray-200'}`}>
                         <div className={`p-4 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-                            <div className="flex items-center justify-between mb-4">
+                            <div className="flex justify-between items-center mb-4">
                                 <h2 className="text-2xl font-semibold">Messages</h2>
                                 <div className="flex gap-2">
-                                    <button onClick={toggleDarkMode} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+                                    <button onClick={toggleDarkMode} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
                                         {isDark ? '☀️' : '🌙'}
                                     </button>
                                     <button onClick={() => setShowAddContact(true)} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full">
@@ -407,134 +386,78 @@
                                     </button>
                                 </div>
                             </div>
-                            <div className={`text-center p-2 rounded-lg font-mono text-sm ${isDark ? 'bg-gray-700 text-white' : 'glass-dark text-white'}`}>
+                            <div className={`text-center p-2 rounded-lg font-mono ${isDark ? 'bg-gray-700 text-white' : 'glass-dark text-white'}`}>
                                 {phoneNumber}
                             </div>
                         </div>
 
                         <div className="flex-1 overflow-y-auto">
-                            {contacts.length === 0 ? (
-                                <div className="p-8 text-center opacity-60">
-                                    <p>No contacts yet</p>
-                                    <p className="text-sm mt-2">Tap + to add someone</p>
-                                </div>
-                            ) : (
-                                contacts.map(contact => (
-                                    <div
-                                        key={contact.number}
-                                        onClick={() => { setActiveContact(contact); markAsRead(contact.number); }}
-                                        className={`p-4 cursor-pointer flex items-center gap-3 border-b transition-all ${isDark ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-100 hover:bg-gray-50'} ${activeContact?.number === contact.number ? isDark ? 'bg-gray-700' : 'bg-blue-50' : ''}`}
-                                    >
-                                        <div className="relative">
-                                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold shadow">
-                                                {contact.profilePic ? (
-                                                    <img src={contact.profilePic} alt="" className="w-full h-full rounded-full object-cover" />
-                                                ) : (
-                                                    contact.name?.[0]?.toUpperCase() || '?'
-                                                )}
-                                            </div>
-                                            {contact.unread > 0 && (
-                                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
-                                                    {contact.unread > 99 ? '99+' : contact.unread}
-                                                </span>
-                                            )}
+                            {contacts.map(contact => (
+                                <div
+                                    key={contact.number}
+                                    onClick={() => { setActiveContact(contact); markAsRead(contact.number); }}
+                                    className={`p-4 cursor-pointer flex items-center gap-3 border-b ${isDark ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-100 hover:bg-gray-50'} ${activeContact?.number === contact.number ? isDark ? 'bg-gray-700' : 'bg-blue-50' : ''}`}
+                                >
+                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold">
+                                        {contact.name[0]?.toUpperCase() || '?'}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex justify-between">
+                                            <h3 className="font-semibold truncate">{contact.name}</h3>
+                                            <span className="text-xs opacity-70">{contact.time}</span>
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex justify-between items-baseline">
-                                                <h3 className="font-semibold truncate">{contact.name}</h3>
-                                                <span className="text-xs opacity-60 ml-2">{contact.time}</span>
-                                            </div>
-                                            <p className="text-sm opacity-70 truncate">{contact.lastMessage || 'No messages yet'}</p>
-                                        </div>
-                                        <div className="relative group">
-                                            <button className="opacity-0 group-hover:opacity-100 px-2 py-1">⋮</button>
-                                            <div className="absolute right-0 top-6 hidden group-hover:block bg-white dark:bg-gray-800 shadow-xl rounded-lg p-2 z-20 min-w-[140px]">
-                                                <button
-                                                    onClick={e => { e.stopPropagation(); editContactName(contact.number); }}
-                                                    className="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                                                >
-                                                    Edit name
-                                                </button>
-                                                <button
-                                                    onClick={e => { e.stopPropagation(); deleteContact(contact.number); }}
-                                                    className="block w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                                                >
-                                                    Delete
-                                                </button>
-                                            </div>
+                                        <p className="text-sm opacity-70 truncate">{contact.lastMessage || 'No messages yet'}</p>
+                                    </div>
+                                    <div className="relative group">
+                                        <button className="opacity-0 group-hover:opacity-100 px-1">⋮</button>
+                                        <div className="absolute right-0 hidden group-hover:block bg-white dark:bg-gray-800 shadow rounded p-1 z-10">
+                                            <button onClick={e => { e.stopPropagation(); editContactName(contact.number); }} className="block px-3 py-1 hover:bg-gray-100 dark:hover:bg-gray-700">Edit</button>
+                                            <button onClick={e => { e.stopPropagation(); deleteContact(contact.number); }} className="block px-3 py-1 text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700">Delete</button>
                                         </div>
                                     </div>
-                                ))
-                            )}
+                                </div>
+                            ))}
                         </div>
 
                         <div className={`p-4 border-t ${isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 glass-dark'}`}>
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center text-white font-bold">
-                                    {profilePic ? (
-                                        <img src={profilePic} alt="" className="w-full h-full rounded-full object-cover" />
-                                    ) : (
-                                        username?.[0]?.toUpperCase() || '?'
-                                    )}
+                                    {username[0]?.toUpperCase() || '?'}
                                 </div>
                                 <div className="flex-1">
-                                    <p className="font-semibold">{username || 'You'}</p>
+                                    <p className="font-semibold">{username}</p>
                                 </div>
-                                <button
-                                    onClick={() => {
-                                        if (confirm('Clear all data and reset?')) {
-                                            localStorage.clear();
-                                            window.location.reload();
-                                        }
-                                    }}
-                                    className="text-xs opacity-70 hover:opacity-100 px-2"
-                                >
-                                    Reset
-                                </button>
+                                <button onClick={() => setShowEditProfile(true)} className="text-xs opacity-70 hover:opacity-100">Edit</button>
+                                <button onClick={handleLogout} className="text-xs opacity-70 hover:opacity-100">Logout</button>
                             </div>
                         </div>
                     </div>
 
-                    {/* Main Chat */}
+                    {/* Chat Area */}
                     <div className="flex-1 flex flex-col">
                         {activeContact ? (
                             <>
                                 <div className={`p-4 border-b flex items-center gap-3 ${isDark ? 'bg-gray-800 border-gray-700' : 'glass border-gray-200'}`}>
                                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold">
-                                        {activeContact.profilePic ? (
-                                            <img src={activeContact.profilePic} alt="" className="w-full h-full rounded-full object-cover" />
-                                        ) : (
-                                            activeContact.name?.[0]?.toUpperCase() || '?'
-                                        )}
+                                        {activeContact.name[0]?.toUpperCase() || '?'}
                                     </div>
                                     <div>
                                         <h2 className="font-semibold">{activeContact.name}</h2>
-                                        <p className="text-xs opacity-60">{activeContact.number}</p>
+                                        <p className="text-xs opacity-70">{activeContact.number}</p>
                                     </div>
                                 </div>
 
                                 <div className={`flex-1 overflow-y-auto p-4 space-y-3 ${isDark ? 'bg-gray-900' : ''}`}>
-                                    {(messages[activeContact.number] || []).map((msg, idx) => (
-                                        <div
-                                            key={idx}
-                                            className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'} group`}
-                                            onClick={() => setReplyTo(msg)}
-                                        >
-                                            <div
-                                                className={`message-bubble rounded-2xl px-4 py-2 shadow-sm ${msg.isOwn ? 'text-white' : isDark ? 'bg-gray-700 text-gray-100' : 'bg-white border border-gray-200 text-gray-800'}`}
-                                                style={msg.isOwn ? { backgroundColor: settings.bubbleColor } : {}}
-                                            >
+                                    {(messages[activeContact.number] || []).map((msg, i) => (
+                                        <div key={i} className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`} onClick={() => setReplyTo(msg)}>
+                                            <div className={`message-bubble rounded-2xl px-4 py-2 shadow ${msg.isOwn ? 'bg-blue-500 text-white' : isDark ? 'bg-gray-700 text-gray-100' : 'bg-white border text-gray-800'}`}>
                                                 {msg.replyTo && (
-                                                    <div className="text-xs opacity-70 border-l-4 border-current pl-3 mb-1 italic">
-                                                        {msg.replyTo.sender}: {msg.replyTo.text.substring(0, 60)}{msg.replyTo.text.length > 60 ? '…' : ''}
+                                                    <div className="text-xs opacity-70 border-l-4 border-current pl-2 mb-1">
+                                                        {msg.replyTo.sender}: {msg.replyTo.text.substring(0,50)}…
                                                     </div>
                                                 )}
-                                                {msg.isImage ? (
-                                                    <img src={msg.text} alt="Shared image" className="max-w-full rounded-lg" />
-                                                ) : (
-                                                    <p className="break-words">{msg.text}</p>
-                                                )}
-                                                <p className="text-xs mt-1 opacity-60 text-right">{msg.timestamp}</p>
+                                                <p className="break-words">{msg.text}</p>
+                                                <p className="text-xs mt-1 opacity-70 text-right">{msg.timestamp}</p>
                                             </div>
                                         </div>
                                     ))}
@@ -543,117 +466,83 @@
 
                                 <div className={`p-4 border-t ${isDark ? 'bg-gray-800 border-gray-700' : 'glass border-gray-200'}`}>
                                     {replyTo && (
-                                        <div className="flex justify-between items-center text-sm opacity-70 mb-2 bg-black/5 dark:bg-white/5 p-2 rounded">
-                                            <span>Replying to: {replyTo.text.substring(0, 40)}…</span>
-                                            <button onClick={() => setReplyTo(null)} className="text-red-500 hover:text-red-700">×</button>
+                                        <div className="mb-2 text-sm opacity-70 bg-black/5 dark:bg-white/5 p-2 rounded flex justify-between">
+                                            <span>Replying to: {replyTo.text.substring(0,40)}…</span>
+                                            <button onClick={() => setReplyTo(null)} className="text-red-500">×</button>
                                         </div>
                                     )}
-
-                                    {selectedFile && (
-                                        <div className="text-sm mb-2 opacity-80">
-                                            Image: {selectedFile.name} 
-                                            <button onClick={() => setSelectedFile(null)} className="ml-2 text-red-500 hover:underline">Remove</button>
-                                        </div>
-                                    )}
-
-                                    <div className="flex items-center gap-2 relative">
+                                    <div className="flex gap-2">
                                         <input
                                             type="text"
                                             value={inputMessage}
                                             onChange={e => setInputMessage(e.target.value)}
-                                            onKeyPress={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), sendMessage())}
+                                            onKeyPress={e => e.key === 'Enter' && sendMessage()}
                                             placeholder="iMessage or /imagine prompt..."
-                                            className={`flex-1 px-4 py-3 rounded-full border focus:ring-2 outline-none transition ${isDark ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 placeholder-gray-500'}`}
+                                            className={`flex-1 px-4 py-3 rounded-full border focus:ring-2 outline-none ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
                                         />
-
-                                        <button
-                                            onClick={() => setShowEmojiPicker(p => !p)}
-                                            className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition"
-                                        >
-                                            😊
-                                        </button>
-
-                                        <label className="cursor-pointer p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition">
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={handleImageSelect}
-                                                className="hidden"
-                                                ref={fileInputRef}
-                                            />
-                                            📎
-                                        </label>
-
+                                        <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-3 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">😊</button>
                                         <button
                                             onClick={sendMessage}
-                                            disabled={!inputMessage.trim() && !selectedFile}
-                                            className="bg-blue-500 text-white px-6 py-3 rounded-full font-semibold hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition shadow"
+                                            className="bg-blue-500 text-white px-6 py-3 rounded-full hover:bg-blue-600 disabled:opacity-50"
                                         >
                                             <Send />
                                         </button>
-
-                                        {showEmojiPicker && (
-                                            <div className="absolute bottom-16 right-4 z-50 shadow-2xl">
-                                                <emoji-picker
-                                                    onemoji-click={ev => {
-                                                        setInputMessage(prev => prev + ev.detail.unicode);
-                                                        setShowEmojiPicker(false);
-                                                    }}
-                                                />
-                                            </div>
-                                        )}
                                     </div>
+                                    {showEmojiPicker && (
+                                        <div className="absolute bottom-16 right-4 z-50">
+                                            <emoji-picker onemoji-click={e => { setInputMessage(p => p + e.detail.unicode); setShowEmojiPicker(false); }} />
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center opacity-50">
-                                <div className="text-6xl mb-4">💬</div>
-                                <p className="text-xl font-medium">Select a conversation</p>
-                                <p className="text-sm mt-2">Choose or add a contact to start messaging</p>
+                            <div className="flex-1 flex items-center justify-center opacity-60">
+                                <p className="text-2xl">Select or add a contact</p>
                             </div>
                         )}
                     </div>
 
-                    {/* Add Contact Modal */}
+                    {/* Modals */}
                     {showAddContact && (
-                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                            <div className={`rounded-3xl p-8 max-w-md w-full border ${isDark ? 'bg-gray-800 border-gray-700' : 'glass border-white/30'} shadow-2xl`}>
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                            <div className={`rounded-3xl p-8 w-full max-w-md ${isDark ? 'bg-gray-800 border border-gray-700' : 'glass border-white/30'} shadow-2xl`}>
                                 <h3 className="text-2xl font-semibold mb-6">Add Contact</h3>
                                 <div className="space-y-5">
                                     <div>
                                         <label className="block text-sm font-medium mb-2">Name</label>
-                                        <input
-                                            type="text"
-                                            value={newContactName}
-                                            onChange={e => setNewContactName(e.target.value)}
-                                            placeholder="Contact name"
-                                            className={`w-full px-4 py-3 rounded-xl border focus:ring-2 outline-none ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
-                                        />
+                                        <input type="text" value={newContactName} onChange={e => setNewContactName(e.target.value)} className={`w-full px-4 py-3 rounded-xl border ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`} />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium mb-2">Phone Number</label>
-                                        <input
-                                            type="text"
-                                            value={newContactNumber}
-                                            onChange={e => setNewContactNumber(e.target.value.toUpperCase())}
-                                            placeholder="1234ABCD"
-                                            className={`w-full px-4 py-3 rounded-xl border focus:ring-2 outline-none font-mono ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
-                                        />
-                                        <p className="text-xs opacity-60 mt-1">Format: 4 digits + 4 uppercase letters</p>
+                                        <input type="text" value={newContactNumber} onChange={e => setNewContactNumber(e.target.value.toUpperCase())} placeholder="1234ABCD" className={`w-full px-4 py-3 rounded-xl border font-mono ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`} />
+                                        <p className="text-xs opacity-60 mt-1">4 digits + 4 uppercase letters</p>
                                     </div>
-                                    <div className="flex gap-3 mt-6">
-                                        <button
-                                            onClick={() => setShowAddContact(false)}
-                                            className={`flex-1 py-3 rounded-xl border transition ${isDark ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-100'}`}
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            onClick={addContact}
-                                            className="flex-1 bg-blue-500 text-white py-3 rounded-xl hover:bg-blue-600 transition shadow"
-                                        >
-                                            Add Contact
-                                        </button>
+                                    <div className="flex gap-3">
+                                        <button onClick={() => setShowAddContact(false)} className={`flex-1 py-3 rounded-xl border ${isDark ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-100'}`}>Cancel</button>
+                                        <button onClick={addContact} className="flex-1 bg-blue-500 text-white py-3 rounded-xl hover:bg-blue-600 shadow">Add</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showEditProfile && (
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                            <div className={`rounded-3xl p-8 w-full max-w-md ${isDark ? 'bg-gray-800 border border-gray-700' : 'glass border-white/30'} shadow-2xl`}>
+                                <h3 className="text-2xl font-semibold mb-6">Edit Profile</h3>
+                                <div className="space-y-5">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-2">Username</label>
+                                        <input 
+                                            type="text" 
+                                            value={editUsername || username} 
+                                            onChange={e => setEditUsername(e.target.value)} 
+                                            className={`w-full px-4 py-3 rounded-xl border ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`} 
+                                        />
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <button onClick={() => setShowEditProfile(false)} className={`flex-1 py-3 rounded-xl border ${isDark ? 'border-gray-600 hover:bg-gray-700' : 'border-gray-300 hover:bg-gray-100'}`}>Cancel</button>
+                                        <button onClick={handleEditProfile} className="flex-1 bg-blue-500 text-white py-3 rounded-xl hover:bg-blue-600 shadow">Save</button>
                                     </div>
                                 </div>
                             </div>
