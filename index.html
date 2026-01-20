@@ -16,11 +16,60 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.2/firebase-firestore-compat.js"></script>
     <style>
-        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
-        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
-        .glass-dark { background: rgba(30, 30, 40, 0.7); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
-        .message-bubble { max-width: 70%; word-wrap: break-word; }
-        .sidebar-item:hover { background: rgba(0, 0, 0, 0.05); }
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+/* Stronger glassmorphism with subtle borders & saturation */
+.glass {
+    background: rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 20px;
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
+}
+
+.glass-dark {
+    background: rgba(30, 30, 40, 0.35);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+/* Message bubbles – softer, more modern */
+.message-bubble {
+    max-width: 75%;
+    word-wrap: break-word;
+    border-radius: 1.25rem !important;     /* iMessage-like */
+    padding: 0.75rem 1.1rem;
+    line-height: 1.4;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* Sidebar hover & active states */
+.sidebar-item:hover {
+    background: rgba(0, 0, 0, 0.06);
+    transition: background 0.2s;
+}
+
+.sidebar-item.active {
+    background: rgba(59, 130, 246, 0.15) !important;
+    border-left: 4px solid #3b82f6;
+}
+
+/* Better input & button feel */
+input, button {
+    transition: all 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
     </style>
 </head>
 <body>
@@ -554,5 +603,294 @@
 
         ReactDOM.render(<MessagesApp />, document.getElementById('root'));
     </script>
+
+    <script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ────────────────────────────────────────────────────────────────
+//   PASTE THIS ENTIRE BLOCK TO OVERRIDE / ADD FEATURES
+// ────────────────────────────────────────────────────────────────
+
+function EnhancedMessagesApp() {
+  // ── Your existing states (copy-paste or keep from original) ──
+  const [user, setUser]               = useState(null);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [username, setUsername]       = useState('');
+  const [contacts, setContacts]       = useState([]);
+  const [activeContact, setActiveContact] = useState(null);
+  const [messages, setMessages]       = useState({});
+  const [inputMessage, setInputMessage] = useState('');
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [newContactNumber, setNewContactNumber] = useState('');
+  const [newContactName, setNewContactName] = useState('');
+  const [replyTo, setReplyTo]         = useState(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [settings, setSettings]       = useState({ darkMode: false, bubbleColor: '#3b82f6' });
+  const [authMode, setAuthMode]       = useState('signup');
+  const [email, setEmail]             = useState('');
+  const [password, setPassword]       = useState('');
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editUsername, setEditUsername] = useState('');
+
+  // ── NEW STATES for menu + pics + multi-select (if you want to keep it) ──
+  const [openMenuContact, setOpenMenuContact] = useState(null);
+  const [selectMode, setSelectMode]           = useState(false);
+  const [selectedChats, setSelectedChats]     = useState(new Set());
+
+  const peerRef = useRef(null);
+  const connectionsRef = useRef({});
+  const messagesEndRef = useRef(null);
+
+  // ── Your Firebase + Peer setup (same as before) ──
+  const firebaseConfig = { /* your config here – keep yours */ };
+  const app = firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore(app);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        const userDoc = await db.collection('users').doc(currentUser.uid).get();
+        let data = userDoc.exists ? userDoc.data() : {};
+        
+        setUsername(data.username || currentUser.email.split('@')[0]);
+        setPhoneNumber(data.phoneNumber || generatePhoneNumber());
+        setContacts(data.contacts || []);
+        setSettings(data.settings || { darkMode: false, bubbleColor: '#3b82f6' });
+
+        // Load local profile pictures (overrides Firestore if exist)
+        const savedPics = JSON.parse(localStorage.getItem('contact_pics') || '{}');
+        setContacts(prev => prev.map(c => ({
+          ...c,
+          profilePic: savedPics[c.number] || c.profilePic
+        })));
+
+        // Peer setup...
+        const peer = new Peer(data.phoneNumber || phoneNumber);
+        peerRef.current = peer;
+        peer.on('open', id => console.log('Peer ID:', id));
+        peer.on('connection', setupConnection);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, activeContact]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (openMenuContact && !e.target.closest('.contact-menu-trigger')) {
+        setOpenMenuContact(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [openMenuContact]);
+
+  // ── Your existing functions (sendMessage, addContact, etc.) can stay above ──
+  // For brevity we skip repeating them here – assume they exist
+
+  const editContactName = (number) => {
+    const curr = contacts.find(c => c.number === number)?.name || '';
+    const newName = prompt('New contact name:', curr);
+    if (newName?.trim()) {
+      setContacts(prev => prev.map(c => 
+        c.number === number ? { ...c, name: newName.trim() } : c
+      ));
+    }
+  };
+
+  const handleUploadProfilePic = (contactNumber) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target.result;
+        setContacts(prev => prev.map(c => 
+          c.number === contactNumber ? { ...c, profilePic: base64 } : c
+        ));
+        // Save to localStorage
+        const picMap = JSON.parse(localStorage.getItem('contact_pics') || '{}');
+        picMap[contactNumber] = base64;
+        localStorage.setItem('contact_pics', JSON.stringify(picMap));
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  const deleteContact = (number) => {
+    if (!confirm('Delete this contact and all messages?')) return;
+    setContacts(prev => prev.filter(c => c.number !== number));
+    setMessages(prev => { const m = { ...prev }; delete m[number]; return m; });
+    if (activeContact?.number === number) setActiveContact(null);
+  };
+
+  // ── MULTI-SELECT HELPERS (optional – remove if you don’t want them) ──
+  const toggleSelectMode = () => {
+    setSelectMode(!selectMode);
+    if (!selectMode) setSelectedChats(new Set());
+  };
+
+  const toggleChatSelection = (number) => {
+    setSelectedChats(prev => {
+      const s = new Set(prev);
+      if (s.has(number)) s.delete(number); else s.add(number);
+      return s;
+    });
+  };
+
+  const deleteSelectedChats = () => {
+    if (!selectedChats.size || !confirm(`Delete ${selectedChats.size} chat${selectedChats.size > 1 ? 's' : ''}?`)) return;
+    setContacts(prev => prev.filter(c => !selectedChats.has(c.number)));
+    setMessages(prev => {
+      const m = { ...prev };
+      selectedChats.forEach(n => delete m[n]);
+      return m;
+    });
+    setSelectedChats(new Set());
+    setSelectMode(false);
+  };
+
+  const isDark = settings.darkMode;
+
+  return (
+    <div className={`h-screen flex overflow-hidden ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gradient-to-br from-blue-50 to-white'}`}>
+
+      {/* ── SIDEBAR ── */}
+      <div className={`w-80 border-r flex flex-col ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white/70 backdrop-blur-xl border-gray-200'}`}>
+
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="text-2xl font-semibold">Messages</h2>
+            <div className="flex gap-2">
+              <button onClick={toggleSelectMode} className={`px-3 py-1.5 text-sm rounded-full ${selectMode ? 'bg-red-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                {selectMode ? 'Cancel' : 'Select'}
+              </button>
+              {selectMode && (
+                <button onClick={deleteSelectedChats} disabled={!selectedChats.size} className="px-3 py-1.5 bg-red-600 text-white rounded-full text-sm disabled:opacity-50">
+                  Delete {selectedChats.size || ''}
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="text-center font-mono bg-gray-100/50 dark:bg-gray-700/50 py-2 rounded-lg">
+            {phoneNumber || 'Not connected'}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {contacts.map(contact => (
+            <div
+              key={contact.number}
+              onClick={() => {
+                if (selectMode) toggleChatSelection(contact.number);
+                else {
+                  setActiveContact(contact);
+                  // markAsRead if you have it
+                }
+              }}
+              className={`p-4 flex items-center gap-3 border-b cursor-pointer relative
+                ${isDark ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-100 hover:bg-gray-50'}
+                ${activeContact?.number === contact.number && !selectMode ? 'bg-blue-50 dark:bg-gray-700' : ''}
+                ${selectedChats.has(contact.number) ? 'bg-blue-100/40 dark:bg-blue-900/30' : ''}`}
+            >
+              {selectMode && (
+                <input
+                  type="checkbox"
+                  checked={selectedChats.has(contact.number)}
+                  onChange={() => toggleChatSelection(contact.number)}
+                  className="w-5 h-5 rounded accent-blue-500"
+                />
+              )}
+
+              <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-400 to-blue-600 flex-shrink-0">
+                {contact.profilePic ? (
+                  <img src={contact.profilePic} alt={contact.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white font-bold text-xl">
+                    {contact.name?.[0]?.toUpperCase() || '?'}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between">
+                  <h3 className="font-semibold truncate">{contact.name}</h3>
+                  <span className="text-xs opacity-60">{contact.time}</span>
+                </div>
+                <p className="text-sm opacity-70 truncate">{contact.lastMessage || 'No messages yet'}</p>
+              </div>
+
+              {!selectMode && (
+                <button
+                  className="contact-menu-trigger p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 opacity-70 hover:opacity-100"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setOpenMenuContact(prev => prev === contact.number ? null : contact.number);
+                  }}
+                >
+                  ⋮
+                </button>
+              )}
+
+              {openMenuContact === contact.number && !selectMode && (
+                <div className="absolute right-4 top-10 w-56 bg-white dark:bg-gray-800 shadow-2xl rounded-xl border border-gray-200 dark:border-gray-700 z-50 py-1 text-sm">
+                  <button
+                    onClick={e => { e.stopPropagation(); editContactName(contact.number); setOpenMenuContact(null); }}
+                    className="w-full text-left px-5 py-3 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    Edit name
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); handleUploadProfilePic(contact.number); setOpenMenuContact(null); }}
+                    className="w-full text-left px-5 py-3 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    Upload profile picture
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); deleteContact(contact.number); setOpenMenuContact(null); }}
+                    className="w-full text-left px-5 py-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                  >
+                    Delete chat
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Bottom user info */}
+        <div className={`p-4 border-t ${isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white/70 backdrop-blur-xl'}`}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gray-400 flex items-center justify-center text-white font-bold">
+              {username[0]?.toUpperCase() || '?'}
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold">{username}</p>
+            </div>
+            <button onClick={() => setShowEditProfile(true)} className="text-sm opacity-70 hover:opacity-100">Edit</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── CHAT AREA & MODALS ── */}
+      {/* Keep your existing chat area, input, emoji picker, modals, etc. */}
+      {/* ... paste your original chat + modals code here ... */}
+
+    </div>
+  );
+}
+
+ReactDOM.render(<EnhancedMessagesApp />, document.getElementById('root'));
+</script>
 </body>
 </html>
